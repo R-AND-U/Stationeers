@@ -24,7 +24,7 @@ namespace stationeers {
     // Debugger
 
     template<typename F>
-    Debugger<F>::Debugger(F &&func, const bool exit)
+    Debugger<F>::Debugger(F &&func, const bool exit) noexcept(std::is_nothrow_move_constructible_v<F>)
         : func(std::move(func))
         , exit(exit) {}
 
@@ -73,7 +73,7 @@ namespace stationeers {
     }
 
     template<class C, typename F>
-    Debugger<F C::*>::Debugger(F C::*func, const bool exit)
+    Debugger<F C::*>::Debugger(F C::*func, const bool exit) noexcept
         : func(func)
         , exit(exit) {}
 
@@ -113,13 +113,46 @@ namespace stationeers {
                 First = false;
             }
 
-            std::cerr << "    File \"" << L.file << "\", line " << L.line << ", in <"
-                      << L.function << ">"
+            std::cerr << "    File \"" << L.file << "\", line " << L.line << ", in <" << L.function
+                      << ">"
                       << "\n\t" << e.what() << std::endl;
 
             return handleError<R>(e);
         }
     }
+
+    // SafeExecutor
+
+#ifdef _MSC_VER
+
+    #include <excpt.h>
+
+    template<typename F>
+    auto safeExecute(F &&func) noexcept -> SafeExecuteResult<decltype(func())> {
+        using R = decltype(func());
+
+        SafeExecuteResult<R> result;
+
+        __try {
+            result.result    = func();
+            result.success   = true;
+            result.errorCode = 0;
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            result.success   = false;
+            result.errorCode = GetExceptionCode();
+        }
+
+        return result;
+    }
+
+#elif defined(__GNUC__) || defined(__clang__)
+
+#else
+
+    #error "SafeExecute cannot be implemented in unsupported compilers"
+
+#endif
+
 
 }  // namespace stationeers
 
